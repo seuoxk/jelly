@@ -4,6 +4,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainScreen from './MainScreen';
 import DictionaryScreen from './DictionaryScreen';
+import ScannerScreen from './ScannerScreen';
+import EmergencyScreen from './EmergencyScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -14,6 +16,8 @@ export default function App() {
         <Stack.Navigator initialRouteName="Main" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Main" component={MainScreen} />
           <Stack.Screen name="Dictionary" component={DictionaryScreen} />
+          <Stack.Screen name="Scanner" component={ScannerScreen} />
+          <Stack.Screen name="Emergency" component={EmergencyScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </View>
