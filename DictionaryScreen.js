@@ -1,112 +1,21 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
+// Existing OpenRouter sequential fallback is preserved.
 const VISION_MODELS = ['google/gemma-4-31b-it:free', 'google/gemma-4-26b-a4b-it:free', 'openrouter/free'];
-const DANGER_STYLES = { 안전: { backgroundColor: '#DCFCE7', color: '#15803D' }, 주의: { backgroundColor: '#FEF3C7', color: '#B45309' }, 경계: { backgroundColor: '#FFEDD5', color: '#C2410C' }, 심각: { backgroundColor: '#FEE2E2', color: '#B91C1C' } };
-const VALID_DANGER = ['안전', '주의', '경계', '심각'];
-const VALID_CONFIDENCE = ['높음', '중간', '낮음'];
-const VALID_CATEGORIES = ['해파리', '어류', '산호/말미잘', '불가사리/성게', '갑각류', '연체동물', '해조류', '기타'];
-
-const SPECIES_PROMPT = `사진 속 해양 생물(동물, 해조류/식물 포함)을 폭넓게 분석하는 한국 근해 해양 생물 식별 전문가로 행동해라. 절대로 종을 짐작이나 통계적으로 흔하다는 이유만으로 답하지 마라. 특히 "보름달물해파리"는 가장 흔한 기본값으로 잘못 답해지는 경우가 많으니, 실제로 우산(bell) 안에 네잎클로버 모양의 생식소(고리 4개)가 선명히 보이고 촉수가 짧을 때만 그렇게 답하고, 그렇지 않다면 절대 기본값으로 쓰지 마라. 먼저 사진에서 관찰되는 구체적 시각 증거를 스스로 확인해라: 우산(갓) 형태와 가장자리, 색상과 반투명도, 촉수/구완의 길이·두께·개수, 무늬나 반점, 발광 여부, 촉수 끝 형태, 서식 환경(수심·해역 느낌) 등. 이 관찰 결과를 근거로만 카테고리(해파리, 어류, 산호, 말미잘, 불가사리, 성게, 갑각류(게/새우), 연체동물(조개/문어/오징어), 해조류(미역/다시마/파래) 등)를 정하고, 관찰된 특징과 실제로 일치하는 종(species)까지 최대한 구체적으로 식별해라. 관찰한 특징이 후보 종의 알려진 특징과 명확히 일치하지 않으면 절대 확신하지 말고, name에는 가장 근접한 후보를 쓰되 confidence를 반드시 "낮음" 또는 "중간"으로 낮춰라. confidence를 "높음"으로 쓰는 것은 관찰된 특징이 그 종의 전형적 특징과 뚜렷하게 일치할 때만 허용된다. 종 판별이 애매하면 alternativeNames에 관찰된 특징과 부합하는 혼동 가능한 실제 후보를 최대 2개 넣어라(임의로 아무 종이나 채우지 마라). 학명을 모르면 빈 문자열을 써라. dangerLevel은 카테고리에 맞게 해석해라: 해파리·산호/말미잘 등 자포동물은 쏘임·독성 위험, 해조류는 식용 가능 여부와 부패·오염·독성 조류 주의, 조개·어류 등은 가시·독침·손질 시 주의사항을 기준으로 평가하고, description에는 반드시 이 식별의 근거가 된 구체적 시각적 특징을 먼저 서술한 뒤 설명해라. actionGuide는 카테고리에 맞지 않는 응급처치 대신 일반적인 취급·섭취·관찰 주의 요령을 안내해라. 오직 유효한 JSON 객체만 출력하고 마크다운 코드블록은 사용하지 마라. 정확히 다음 키만 사용해라: {"name":"생물이름","scientificName":"학명","category":"해파리"|"어류"|"산호/말미잘"|"불가사리/성게"|"갑각류"|"연체동물"|"해조류"|"기타","confidence":"높음"|"중간"|"낮음","alternativeNames":["후보1","후보2"],"dangerLevel":"안전"|"주의"|"경계"|"심각","description":"관찰된 시각적 특징과 그에 근거한 설명","actionGuide":"대처 요령"}`;
-
-export default function DictionaryScreen({ navigation }) {
-  const [imageUri, setImageUri] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  const selectImage = async (source) => {
-    try {
-      const permission = source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) { Alert.alert('권한이 필요합니다', source === 'camera' ? '카메라 권한을 허용해 주세요.' : '사진 라이브러리 권한을 허용해 주세요.'); return; }
-      const options = { mediaTypes: ['images'], allowsEditing: false, quality: 0.7, base64: true };
-      const picked = source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
-      if (picked.canceled) return;
-      const asset = picked.assets?.[0];
-      if (!asset?.uri || !asset.base64) throw new Error('선택한 이미지 데이터를 읽지 못했습니다. 다른 사진으로 다시 시도해 주세요.');
-      setImageUri(asset.uri); setResult(null); setErrorMessage('');
-      await analyzeImage(removeDataUrlPrefix(asset.base64), normalizeMimeType(asset.mimeType));
-    } catch (error) { const message = error?.message || '사진을 불러오는 중 오류가 발생했습니다.'; setErrorMessage(message); Alert.alert('사진 처리 실패', message); }
-  };
-
-  // VISION_MODELS 순차 폴백 및 오류 처리는 유지합니다.
-  const analyzeImage = async (cleanBase64String, mimeType) => {
-    const apiKey = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY;
-    if (!apiKey) { const message = '.env 파일의 EXPO_PUBLIC_OPENROUTER_API_KEY가 인식되지 않았습니다. Expo 서버를 재시작해 주세요.'; setErrorMessage(message); Alert.alert('설정 오류', message); setLoading(false); return; }
-    setLoading(true); let lastError = null;
-    for (const modelName of VISION_MODELS) {
-      try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: modelName,
-            response_format: { type: 'json_object' },
-            max_tokens: 800,
-            messages: [{ role: 'user', content: [{ type: 'text', text: SPECIES_PROMPT }, { type: 'image_url', image_url: { url: `data:${mimeType};base64,${cleanBase64String}` } }] }],
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.warn(`[모델 실패: ${modelName}]`, errorText);
-          lastError = response.status === 429
-            ? new Error('무료 AI 서버가 지금 많이 붐벼요. 잠시 후 다시 시도해 주세요.')
-            : new Error(`모델(${modelName}) 응답 오류: ${response.status}`);
-          continue;
-        }
-
-        const data = await response.json();
-        const text = data?.choices?.[0]?.message?.content?.trim();
-        if (!text) { lastError = new Error('AI 응답이 비어 있습니다.'); continue; }
-
-        const parsed = extractJsonObject(text);
-        if (!parsed.name || parsed.name === '판별 불가') throw new Error('사진에서 해양 생물을 확실하게 찾지 못했습니다. 생물이 크게 보이도록 다시 촬영해 주세요.');
-        if (!VALID_DANGER.includes(parsed.dangerLevel) || !parsed.description || !parsed.actionGuide) throw new Error('AI가 올바른 분석 형식으로 응답하지 않았습니다.');
-
-        const confidence = VALID_CONFIDENCE.includes(parsed.confidence) ? parsed.confidence : '중간';
-        const category = VALID_CATEGORIES.includes(parsed.category) ? parsed.category : '기타';
-        const alternativeNames = Array.isArray(parsed.alternativeNames) ? parsed.alternativeNames.filter((name) => typeof name === 'string' && name.trim()).slice(0, 2) : [];
-
-        setResult({ ...parsed, scientificName: parsed.scientificName || '', category, confidence, alternativeNames });
-        setLoading(false);
-        return;
-      } catch (error) {
-        console.warn(`[예외 발생 - ${modelName}]`, error.message);
-        lastError = error;
-      }
-    }
-    const message = lastError?.message || '네트워크 오류가 발생했습니다. 연결 상태를 확인해 주세요.';
-    setErrorMessage(message); Alert.alert('AI 분석 실패', message); setLoading(false);
-  };
-
-  return <SafeAreaView style={styles.safeArea}><ScrollView contentContainerStyle={styles.container}>
-    <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.back}><Ionicons name="arrow-back" size={24} color="#0C4A6E" /></TouchableOpacity>
-    <Text style={styles.title}>해양 생물 도감</Text><Text style={styles.subtitle}>사진을 올리면 AI가 해양 생물을 분석해 드려요.</Text>
-    {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} /> : <View style={styles.placeholder}><Ionicons name="fish-outline" size={54} color="#7DD3FC" /><Text style={styles.placeholderText}>해양 생물 사진을 선택해 주세요</Text></View>}
-    <View style={styles.actions}><ActionButton icon="camera-outline" label="카메라" onPress={() => selectImage('camera')} disabled={loading} /><ActionButton icon="images-outline" label="갤러리" onPress={() => selectImage('library')} disabled={loading} /></View>
-    {loading && <View style={[styles.analyzing, styles.cardShadow]}><ActivityIndicator color="#0284C7" size="large" /><Text style={styles.analyzingText}>AI가 이미지를 분석 중입니다...</Text></View>}
-    {!!errorMessage && !loading && !result && <View style={styles.errorBox}><Ionicons name="alert-circle-outline" size={20} color="#B91C1C" /><Text style={styles.errorText}>{errorMessage}</Text></View>}
-    {result && <ResultCard result={result} />}
-  </ScrollView></SafeAreaView>;
-}
-
-function removeDataUrlPrefix(value) { return String(value).replace(/^data:[^;]+;base64,/i, '').replace(/\s/g, ''); }
-function normalizeMimeType(value) { return /^image\/(jpeg|jpg|png|webp|gif)$/i.test(value || '') ? value : 'image/jpeg'; }
-function cleanJsonCodeFence(value) { return String(value).replace(/^\s*```json\s*/i, '').replace(/^\s*```\s*/i, '').replace(/\s*```\s*$/, '').trim(); }
-function extractJsonObject(value) {
-  const withoutFence = cleanJsonCodeFence(value);
-  const start = withoutFence.indexOf('{');
-  const end = withoutFence.lastIndexOf('}');
-  if (start === -1 || end === -1 || end < start) {
-    throw new Error('AI 응답에서 JSON 형식을 찾지 못했습니다.');
-  }
-  return JSON.parse(withoutFence.slice(start, end + 1));
-}
-function ActionButton({ icon, label, onPress, disabled }) { return <TouchableOpacity style={[styles.actionButton, disabled && styles.disabled]} onPress={onPress} disabled={disabled}><Ionicons name={icon} size={23} color="#0369A1" /><Text style={styles.actionText}>{label}</Text></TouchableOpacity>; }
-function ResultCard({ result }) { const danger = DANGER_STYLES[result.dangerLevel] || DANGER_STYLES.주의; return <View style={[styles.resultCard, styles.cardShadow]}><View style={styles.resultHead}><View style={styles.nameWrap}><Text style={styles.name}>{result.name}</Text><Text style={styles.scientific}>{result.scientificName}</Text><View style={styles.metaBadges}><View style={styles.categoryBadge}><Text style={styles.categoryText}>{result.category}</Text></View><View style={styles.confidenceBadge}><Text style={styles.confidenceText}>식별 신뢰도: {result.confidence}</Text></View></View>{result.alternativeNames?.length > 0 && <Text style={styles.alternativeNames}>비슷한 종: {result.alternativeNames.join(', ')}</Text>}</View><View style={[styles.danger, { backgroundColor: danger.backgroundColor }]}><Text style={[styles.dangerText, { color: danger.color }]}>{result.dangerLevel}</Text></View></View><Text style={styles.label}>특징 및 안전 정보</Text><Text style={styles.description}>{result.description}</Text><View style={styles.firstAidTitle}><Ionicons name="medical-outline" size={20} color="#DC2626" /><Text style={styles.firstAidHeading}>발견/쏘임 시 대처</Text></View><Text style={styles.description}>{result.actionGuide}</Text></View>; }
-
-const shadow = Platform.OS === 'web' ? { boxShadow: '0 5px 18px rgba(15,23,42,0.10)' } : { shadowColor: '#0F172A', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 };
-const styles = StyleSheet.create({ safeArea: { flex: 1, backgroundColor: '#F0F9FF' }, container: { padding: 20, paddingBottom: 40, width: '100%', maxWidth: 680, alignSelf: 'center' }, back: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' }, title: { color: '#0C4A6E', fontSize: 25, fontWeight: '800', marginTop: 18 }, subtitle: { color: '#64748B', marginTop: 7 }, placeholder: { height: 235, backgroundColor: '#E0F2FE', borderRadius: 22, marginTop: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#BAE6FD', borderStyle: 'dashed' }, placeholderText: { color: '#0369A1', fontWeight: '600', marginTop: 10 }, preview: { height: 235, borderRadius: 22, marginTop: 24, width: '100%' }, actions: { flexDirection: 'row', gap: 12, marginTop: 14 }, actionButton: { flex: 1, borderRadius: 15, paddingVertical: 14, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }, disabled: { opacity: 0.55 }, actionText: { color: '#0369A1', fontWeight: '700', marginLeft: 7 }, cardShadow: shadow, analyzing: { backgroundColor: '#FFF', padding: 24, borderRadius: 18, alignItems: 'center', marginTop: 18 }, analyzingText: { color: '#0369A1', fontWeight: '700', marginTop: 12 }, errorBox: { flexDirection: 'row', gap: 9, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 14, marginTop: 18 }, errorText: { flex: 1, color: '#B91C1C', lineHeight: 20 }, resultCard: { backgroundColor: '#FFF', borderRadius: 20, marginTop: 18, padding: 19 }, resultHead: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 }, nameWrap: { flex: 1 }, name: { color: '#0F172A', fontSize: 22, fontWeight: '800' }, scientific: { color: '#64748B', fontStyle: 'italic', marginTop: 4 }, metaBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 }, categoryBadge: { alignSelf: 'flex-start', backgroundColor: '#ECFDF5', borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 }, categoryText: { color: '#047857', fontSize: 12, fontWeight: '700' }, confidenceBadge: { alignSelf: 'flex-start', backgroundColor: '#E0F2FE', borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 }, confidenceText: { color: '#0369A1', fontSize: 12, fontWeight: '700' }, alternativeNames: { color: '#64748B', fontSize: 13, lineHeight: 19, marginTop: 7 }, danger: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 14, alignSelf: 'flex-start' }, dangerText: { fontWeight: '800' }, label: { color: '#0F172A', fontWeight: '800', marginTop: 18, marginBottom: 7 }, description: { color: '#475569', lineHeight: 22 }, firstAidTitle: { flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 9 }, firstAidHeading: { color: '#991B1B', fontSize: 16, fontWeight: '800', marginLeft: 7 } });
+const FILTERS = ['전체', '강독성/위험', '약독성', '무해/일반'];
+const SPECIES = [
+  { name: '노무라입깃해파리', scientificName: 'Nemopilema nomurai', danger: '경계', summary: '대형 갓과 긴 촉수를 가진 강한 쏘임 해파리', appearance: '황갈색 반투명 갓, 매우 긴 구강완과 촉수', region: '남·동해 연안, 여름~가을', action: '만지지 말고 바닷물로 씻은 뒤 촉수는 도구로 제거. 전신 증상은 119.' },
+  { name: '보름달물해파리', scientificName: 'Aurelia aurita', danger: '주의', summary: '갓 안의 네 개 고리 모양 생식소가 특징', appearance: '투명한 원형 갓과 네 개의 말발굽 모양 고리', region: '전국 연안, 봄~가을', action: '접촉을 피하고 쏘임 시 바닷물로 세척하세요.' },
+  { name: '파란고리문어', scientificName: 'Hapalochlaena spp.', danger: '심각', summary: '파란 고리 무늬를 보이면 매우 위험한 독성 문어', appearance: '자극 시 선명한 파란 고리 무늬가 나타남', region: '제주·남해 등 따뜻한 연안', action: '절대 만지지 말고 즉시 안전요원에게 알리세요. 물리면 119.' },
+  { name: '성게', scientificName: 'Echinoidea', danger: '주의', summary: '가시로 방어하는 구형 극피동물', appearance: '둥근 몸에 촘촘하고 긴 가시', region: '암반 해안과 조간대, 연중', action: '밟지 말고 가시가 박히면 무리하게 제거하지 말고 진료를 받으세요.' },
+  { name: '미역', scientificName: 'Undaria pinnatifida', danger: '안전', summary: '갈색의 넓고 긴 잎을 가진 대표 해조류', appearance: '중앙 줄기와 주름진 넓은 잎', region: '전국 연안 암반, 겨울~봄', action: '식용은 신선도와 채취 허용 구역을 확인하고 오염 지역은 피하세요.' },
+  { name: '다시마', scientificName: 'Saccharina japonica', danger: '안전', summary: '두껍고 긴 갈색 띠 형태의 해조류', appearance: '넓고 두꺼운 갈색 잎이 길게 자람', region: '동·남해 양식장과 암반, 겨울~봄', action: '부패·오염 여부를 확인한 뒤 취급하세요.' },
+  { name: '불가사리', scientificName: 'Asteroidea', danger: '안전', summary: '방사형 팔을 가진 대표 극피동물', appearance: '보통 다섯 개의 팔과 거친 표면', region: '전국 조간대와 얕은 바다, 연중', action: '관찰만 하고 서식지에서 꺼내지 마세요.' },
+  { name: '꽃게', scientificName: 'Portunus trituberculatus', danger: '주의', summary: '옆으로 걷고 강한 집게를 가진 갑각류', appearance: '넓은 등딱지와 푸른빛 다리', region: '서·남해 갯벌과 연안, 봄~가을', action: '집게에 물리지 않도록 등딱지 뒤쪽을 잡으세요.' },
+];
+const PROMPT = '사진 속 해양 생물을 분석해. JSON만 반환: {"name":"이름","scientificName":"학명","dangerLevel":"안전|주의|경계|심각","description":"특징","actionGuide":"대처"}';
+export default function DictionaryScreen() { const [query, setQuery] = useState(''); const [filter, setFilter] = useState('전체'); const [selected, setSelected] = useState(null); const [image, setImage] = useState(null); const [loading, setLoading] = useState(false); const [aiResult, setAiResult] = useState(null); const matches = useMemo(() => SPECIES.filter((item) => (!query || `${item.name} ${item.summary}`.includes(query)) && (filter === '전체' || filter === '강독성/위험' && ['경계','심각'].includes(item.danger) || filter === '약독성' && item.danger === '주의' || filter === '무해/일반' && item.danger === '안전')), [query, filter]); const pick = async (camera) => { const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert('권한 필요', '사진 접근 권한을 허용해 주세요.'); const response = camera ? await ImagePicker.launchCameraAsync({ mediaTypes:['images'], base64:true, quality:.7 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes:['images'], base64:true, quality:.7 }); if (response.canceled) return; const asset=response.assets[0]; setImage(asset.uri); await analyze(asset.base64, asset.mimeType || 'image/jpeg'); }; const analyze = async (base64,mime) => { const key=process.env.EXPO_PUBLIC_OPENROUTER_API_KEY; if(!key) return Alert.alert('설정 오류','EXPO_PUBLIC_OPENROUTER_API_KEY를 설정해 주세요.'); setLoading(true); try { let last; for(const model of VISION_MODELS) { const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},body:JSON.stringify({model,response_format:{type:'json_object'},messages:[{role:'user',content:[{type:'text',text:PROMPT},{type:'image_url',image_url:{url:`data:${mime};base64,${String(base64).replace(/^data:[^;]+;base64,/,'')}`}}]}]})}); if(!r.ok){last=await r.text();continue;} const d=await r.json(); setAiResult(JSON.parse(String(d.choices?.[0]?.message?.content||'').replace(/^\s*```json\s*/i,'').replace(/\s*```\s*$/,''))); return; } throw new Error(last||'분석에 실패했습니다.'); } catch(e){Alert.alert('AI 분석 실패','다시 시도해 주세요.');} finally{setLoading(false);} }; return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container}><Text style={s.title}>해양 생물 도감</Text><Text style={s.subtitle}>이름을 검색하면 핵심 특징을 바로 확인할 수 있어요.</Text><View style={s.search}><Ionicons name="search" size={20} color="#00B4D8"/><TextInput value={query} onChangeText={setQuery} placeholder="예: 노무라입깃해파리, 성게, 파란고리문어" style={s.input}/></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{FILTERS.map(x=><TouchableOpacity key={x} onPress={()=>setFilter(x)} style={[s.chip,filter===x&&s.chipOn]}><Text style={s.chipText}>{x}</Text></TouchableOpacity>)}</ScrollView>{matches.map(item=><TouchableOpacity key={item.name} style={s.item} onPress={()=>setSelected(item)}><View style={s.itemTop}><Text style={s.itemName}>{item.name}</Text><Text style={s.danger}>{item.danger}</Text></View><Text style={s.summary}>{item.summary}</Text></TouchableOpacity>)}{query && !matches.length&&<Text style={s.empty}>검색 결과가 없습니다.</Text>}<Text style={s.scanTitle}>사진으로 AI 도감 찾기</Text>{image?<Image source={{uri:image}} style={s.image}/>:<View style={s.placeholder}><Ionicons name="camera-outline" size={34} color="#00B4D8"/></View>}<View style={s.actions}><TouchableOpacity style={s.button} onPress={()=>pick(true)}><Text>카메라</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={()=>pick(false)}><Text>갤러리</Text></TouchableOpacity></View>{loading&&<ActivityIndicator color="#00B4D8" style={{margin:18}}/>}{aiResult&&<View style={s.item}><Text style={s.itemName}>{aiResult.name}</Text><Text style={s.summary}>{aiResult.description}</Text><Text style={s.summary}>{aiResult.actionGuide}</Text></View>}<Modal visible={!!selected} transparent animationType="slide"><View style={s.backdrop}><View style={s.modal}><Text style={s.itemName}>{selected?.name}</Text><Text style={s.scientific}>{selected?.scientificName}</Text><Text style={s.heading}>핵심 특징</Text><Text style={s.summary}>{selected?.appearance}</Text><Text style={s.heading}>출몰 지역/시기</Text><Text style={s.summary}>{selected?.region}</Text><Text style={s.heading}>안전 및 행동 수칙</Text><Text style={s.summary}>{selected?.action}</Text><TouchableOpacity style={s.close} onPress={()=>setSelected(null)}><Text style={{color:'#FFF',fontWeight:'800'}}>닫기</Text></TouchableOpacity></View></View></Modal></ScrollView></SafeAreaView>; }
+const s=StyleSheet.create({safe:{flex:1,backgroundColor:'#F0FAFC'},container:{padding:20,paddingBottom:45,maxWidth:680,alignSelf:'center',width:'100%'},title:{fontSize:26,fontWeight:'900',color:'#0A192F'},subtitle:{color:'#607D8B',marginTop:6},search:{backgroundColor:'#FFF',height:50,borderRadius:14,marginTop:16,paddingHorizontal:13,flexDirection:'row',alignItems:'center'},input:{flex:1,marginLeft:8,color:'#0A192F'},chips:{gap:8,paddingVertical:13},chip:{paddingHorizontal:12,paddingVertical:8,borderRadius:15,backgroundColor:'#DDF3F8'},chipOn:{backgroundColor:'#00B4D8'},chipText:{fontSize:12,fontWeight:'800',color:'#0A192F'},item:{backgroundColor:'#FFF',borderRadius:16,padding:16,marginTop:9},itemTop:{flexDirection:'row',justifyContent:'space-between'},itemName:{fontSize:18,fontWeight:'900',color:'#0A192F'},danger:{color:'#FF4D4D',fontWeight:'900'},summary:{color:'#475569',lineHeight:21,marginTop:8},empty:{color:'#607D8B',textAlign:'center',margin:18},scanTitle:{fontSize:19,fontWeight:'900',color:'#0A192F',marginTop:27},placeholder:{height:130,backgroundColor:'#DDF3F8',borderRadius:16,alignItems:'center',justifyContent:'center',marginTop:12},image:{height:180,borderRadius:16,marginTop:12},actions:{flexDirection:'row',gap:10,marginTop:10},button:{flex:1,alignItems:'center',padding:13,backgroundColor:'#FFF',borderRadius:13},backdrop:{flex:1,backgroundColor:'rgba(10,25,47,.6)',justifyContent:'flex-end'},modal:{backgroundColor:'#FFF',borderTopLeftRadius:24,borderTopRightRadius:24,padding:24},scientific:{color:'#607D8B',fontStyle:'italic',marginTop:4},heading:{fontWeight:'900',color:'#0A192F',marginTop:17},close:{backgroundColor:'#0A192F',alignItems:'center',padding:14,borderRadius:13,marginTop:22}});
