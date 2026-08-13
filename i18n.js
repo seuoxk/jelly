@@ -39,10 +39,10 @@ const emergencySteps = {
 };
 Object.entries(emergencySteps).forEach(([language, steps]) => i18n.addResourceBundle(language, 'translation', { emergency: { stepsData: steps } }, true, true));
 const themeCopy = {
-  ko: { title: '테마 선택', system: '시스템 설정', light: '노말 테마', dark: '다크 모드', ocean: '바다 에디션', pastel: '파스텔 에디션', halloween: '할로윈 테마', christmas: '크리스마스 테마', seasonLocked: '시즌 한정' },
-  en: { title: 'Choose theme', system: 'Use system setting', light: 'Normal theme', dark: 'Dark mode', ocean: 'Ocean edition', pastel: 'Pastel edition', halloween: 'Halloween theme', christmas: 'Christmas theme', seasonLocked: 'Seasonal only' },
-  zh: { title: '选择主题', system: '跟随系统设置', light: '普通主题', dark: '深色模式', ocean: '海洋版主题', pastel: '粉彩主题', halloween: '万圣节主题', christmas: '圣诞节主题', seasonLocked: '仅限当季' },
-  ja: { title: 'テーマを選択', system: 'システム設定を使用', light: 'ノーマルテーマ', dark: 'ダークモード', ocean: 'オーシャンエディション', pastel: 'パステルエディション', halloween: 'ハロウィンテーマ', christmas: 'クリスマステーマ', seasonLocked: 'シーズン限定' },
+  ko: { title: '테마 선택', system: '시스템 설정', light: '노말 테마', dark: '다크 모드', ocean: '바다 에디션', pastel: '파스텔 에디션', cherry: '벚꽃 에디션', nightSea: '밤바다 에디션', arctic: '북극 에디션', halloween: '할로윈 테마', christmas: '크리스마스 테마', seasonLocked: '시즌 한정' },
+  en: { title: 'Choose theme', system: 'Use system setting', light: 'Normal theme', dark: 'Dark mode', ocean: 'Ocean edition', pastel: 'Pastel edition', cherry: 'Cherry blossom edition', nightSea: 'Night sea edition', arctic: 'Arctic edition', halloween: 'Halloween theme', christmas: 'Christmas theme', seasonLocked: 'Seasonal only' },
+  zh: { title: '选择主题', system: '跟随系统设置', light: '普通主题', dark: '深色模式', ocean: '海洋版主题', pastel: '粉彩主题', cherry: '樱花版主题', nightSea: '夜海主题', arctic: '北极主题', halloween: '万圣节主题', christmas: '圣诞节主题', seasonLocked: '仅限当季' },
+  ja: { title: 'テーマを選択', system: 'システム設定を使用', light: 'ノーマルテーマ', dark: 'ダークモード', ocean: 'オーシャンエディション', pastel: 'パステルエディション', cherry: '桜エディション', nightSea: '夜の海エディション', arctic: '北極エディション', halloween: 'ハロウィンテーマ', christmas: 'クリスマステーマ', seasonLocked: 'シーズン限定' },
 };
 Object.entries(themeCopy).forEach(([language, theme]) => i18n.addResourceBundle(language, 'translation', { theme }, true, true));
 

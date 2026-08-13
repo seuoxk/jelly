@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppSettings } from './AppSettingsContext';
 
 const LANGUAGES = [{ code: 'ko', label: '한국어', short: 'KO' }, { code: 'en', label: 'English', short: 'EN' }, { code: 'zh', label: '中文', short: 'ZH' }, { code: 'ja', label: '日本語', short: 'JA' }];
-const THEMES = [{ id: 'system', icon: 'phone-portrait-outline' }, { id: 'light', icon: 'sunny-outline' }, { id: 'dark', icon: 'moon-outline' }, { id: 'ocean', icon: 'water-outline' }, { id: 'pastel', icon: 'color-palette-outline' }, { id: 'halloween', icon: 'skull-outline', seasonal: true }, { id: 'christmas', icon: 'gift-outline', seasonal: true }];
+const THEMES = [{ id: 'system', icon: 'phone-portrait-outline' }, { id: 'light', icon: 'sunny-outline' }, { id: 'dark', icon: 'moon-outline' }, { id: 'ocean', icon: 'water-outline' }, { id: 'pastel', icon: 'color-palette-outline' }, { id: 'cherry', icon: 'flower-outline' }, { id: 'nightSea', icon: 'moon-outline' }, { id: 'arctic', icon: 'snow-outline' }, { id: 'halloween', icon: 'skull-outline', seasonal: true }, { id: 'christmas', icon: 'gift-outline', seasonal: true }];
 export default function HeaderControls() {
   const { theme, resolvedTheme, setTheme, language, setLanguage, colors, t, isSeasonalThemeAvailable } = useAppSettings(); const [languageOpen, setLanguageOpen] = useState(false); const [themeOpen, setThemeOpen] = useState(false);
   const current = LANGUAGES.find((item) => item.code === language) || LANGUAGES[0];
