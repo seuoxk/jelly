@@ -45,5 +45,12 @@ const themeCopy = {
   ja: { title: 'テーマを選択', system: 'システム設定を使用', light: 'ノーマルテーマ', dark: 'ダークモード', ocean: 'オーシャンエディション', pastel: 'パステルエディション', cherry: '桜エディション', nightSea: '夜の海エディション', arctic: '北極エディション', halloween: 'ハロウィンテーマ', christmas: 'クリスマステーマ', seasonLocked: 'シーズン限定' },
 };
 Object.entries(themeCopy).forEach(([language, theme]) => i18n.addResourceBundle(language, 'translation', { theme }, true, true));
+const authMessages = {
+  ko: { inputTitle: '입력 확인', inputRequired: '아이디와 비밀번호를 모두 입력해 주세요.', idFormat: '아이디는 2~30자의 영문, 숫자, _, @, ., -만 사용할 수 있습니다.', passwordTitle: '비밀번호 확인', duplicateId: '이미 사용 중인 아이디입니다.', invalidCredentials: '아이디 또는 비밀번호가 일치하지 않습니다.', loginFailedTitle: '로그인 실패', signupFailedTitle: '회원가입 실패' },
+  en: { inputTitle: 'Check your input', inputRequired: 'Enter both your ID and password.', idFormat: 'Use 2–30 letters, numbers, _, @, . or - for your ID.', passwordTitle: 'Check password', duplicateId: 'This ID is already in use.', invalidCredentials: 'The ID or password does not match.', loginFailedTitle: 'Sign-in failed', signupFailedTitle: 'Sign-up failed' },
+  zh: { inputTitle: '检查输入内容', inputRequired: '请输入账号和密码。', idFormat: '账号只能使用 2–30 位字母、数字、_、@、. 或 -。', passwordTitle: '检查密码', duplicateId: '该账号已被使用。', invalidCredentials: '账号或密码不匹配。', loginFailedTitle: '登录失败', signupFailedTitle: '注册失败' },
+  ja: { inputTitle: '入力内容を確認', inputRequired: 'ID とパスワードを入力してください。', idFormat: 'ID には2〜30文字の英字、数字、_、@、.、-のみ使用できます。', passwordTitle: 'パスワードを確認', duplicateId: 'この ID はすでに使用されています。', invalidCredentials: 'ID またはパスワードが一致しません。', loginFailedTitle: 'ログイン失敗', signupFailedTitle: '新規登録失敗' },
+};
+Object.entries(authMessages).forEach(([language, auth]) => i18n.addResourceBundle(language, 'translation', { auth }, true, true));
 
 export default i18n;
