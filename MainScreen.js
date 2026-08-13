@@ -4,56 +4,73 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from './AuthContext';
+import { useAppSettings } from './AppSettingsContext';
+import HeaderControls from './HeaderControls';
 
 const BEACHES = [
-  { name: '해운대 해수욕장', latitude: 35.1587, longitude: 129.1604, region: '부산', extraInfo: {} },
-  { name: '광안리 해수욕장', latitude: 35.1532, longitude: 129.1187, region: '부산', extraInfo: {} },
-  { name: '송정 해수욕장', latitude: 35.1801, longitude: 129.1996, region: '부산', extraInfo: {} },
-  { name: '경포 해수욕장', latitude: 37.7955, longitude: 128.9077, region: '강원', extraInfo: {} },
-  { name: '속초 해수욕장', latitude: 38.1903, longitude: 128.6027, region: '강원', extraInfo: {} },
-  { name: '협재 해수욕장', latitude: 33.3949, longitude: 126.2395, region: '제주', extraInfo: {} },
-  { name: '함덕 해수욕장', latitude: 33.5430, longitude: 126.6695, region: '제주', extraInfo: {} },
-  { name: '대천 해수욕장', latitude: 36.3057, longitude: 126.5132, region: '충남', extraInfo: {} },
+  { name: '해운대해수욕장', latitude: 35.1587, longitude: 129.1604, nx: 99, ny: 75 }, { name: '광안리해수욕장', latitude: 35.1532, longitude: 129.1187, nx: 98, ny: 75 }, { name: '송도해수욕장', latitude: 35.0757, longitude: 129.0169, nx: 97, ny: 74 }, { name: '송정해수욕장', latitude: 35.1801, longitude: 129.1996, nx: 100, ny: 75 }, { name: '다대포해수욕장', latitude: 35.0468, longitude: 128.9656, nx: 97, ny: 74 }, { name: '일광해수욕장', latitude: 35.2611, longitude: 129.2336, nx: 101, ny: 76 }, { name: '임랑해수욕장', latitude: 35.3163, longitude: 129.2628, nx: 101, ny: 77 },
 ];
-const DEFAULT_POSITION = { latitude: 35.1587, longitude: 129.1604 };
+const DEFAULT_BEACH = BEACHES[2];
+const km = (a, b) => { const r = (v) => v * Math.PI / 180; const x = Math.sin(r(b.latitude - a.latitude) / 2) ** 2 + Math.cos(r(a.latitude)) * Math.cos(r(b.latitude)) * Math.sin(r(b.longitude - a.longitude) / 2) ** 2; return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)); };
+const weatherLabel = (sky, rain, language) => { if (rain && rain !== '0') return language === 'en' ? 'Precipitation' : '강수'; return language === 'en' ? ({ 1: 'Clear', 3: 'Cloudy', 4: 'Overcast' })[Number(sky)] || 'Checking' : ({ 1: '맑음', 3: '구름 많음', 4: '흐림' })[Number(sky)] || '확인 중'; };
+function getEncodedKmaServiceKey(rawKey) {
+  try { return encodeURIComponent(decodeURIComponent(rawKey)); }
+  catch (_) { return encodeURIComponent(rawKey); }
+}
+function getKmaBaseDateTime() {
+  // The KMA ultra-short current observation is published at about :40 each hour.
+  // Build the query time in Asia/Seoul even when the web bundle runs elsewhere.
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  const base = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute)));
+  if (base.getUTCMinutes() < 40) base.setUTCHours(base.getUTCHours() - 1);
+  const date = `${base.getUTCFullYear()}${String(base.getUTCMonth() + 1).padStart(2, '0')}${String(base.getUTCDate()).padStart(2, '0')}`;
+  return { date, time: `${String(base.getUTCHours()).padStart(2, '0')}00` };
+}
 
 export default function MainScreen({ navigation }) {
-  const { user, isGuest } = useAuth();
-  const [position, setPosition] = useState(DEFAULT_POSITION);
-  const [loadingLocation, setLoadingLocation] = useState(true);
-  const [notice, setNotice] = useState('');
-  const [favorites, setFavorites] = useState([]);
-  const [now, setNow] = useState(new Date());
-
-  const loadLocation = useCallback(async () => {
-    setLoadingLocation(true); setNotice('');
+  const { user, isGuest } = useAuth(); const { colors, t, language } = useAppSettings();
+  const [position, setPosition] = useState(DEFAULT_BEACH); const [loadingLocation, setLoadingLocation] = useState(true); const [weatherLoading, setWeatherLoading] = useState(true); const [weather, setWeather] = useState(null); const [error, setError] = useState(''); const [favorites, setFavorites] = useState([]);
+  const nearest = useMemo(() => BEACHES.map((beach) => ({ ...beach, distance: km(position, beach) })).sort((a, b) => a.distance - b.distance)[0] || DEFAULT_BEACH, [position]);
+  const locate = useCallback(async () => { setLoadingLocation(true); try { const granted = (await Location.requestForegroundPermissionsAsync()).status === 'granted'; if (!granted) throw new Error(); const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); setPosition(current.coords); } catch (_) { setPosition(DEFAULT_BEACH); } finally { setLoadingLocation(false); } }, []);
+  const loadWeather = useCallback(async (beach) => {
+    setWeatherLoading(true); setError('');
     try {
-      if (!(await Location.hasServicesEnabledAsync())) throw new Error('서비스가 꺼져 있습니다.');
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') throw new Error('위치 권한이 없어 해운대 기준으로 표시합니다.');
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setPosition({ latitude: current.coords.latitude, longitude: current.coords.longitude });
-    } catch (error) { setPosition(DEFAULT_POSITION); setNotice(error.message || '현재 위치를 불러오지 못했습니다.'); }
-    finally { setLoadingLocation(false); }
-  }, []);
-
-  useEffect(() => { loadLocation(); AsyncStorage.getItem('favoriteBeaches').then((value) => setFavorites(JSON.parse(value || '[]'))); }, [loadLocation]);
-  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(timer); }, []);
-  const nearby = useMemo(() => BEACHES.map((beach) => ({ ...beach, distance: distanceKm(position, beach) })).sort((a, b) => a.distance - b.distance), [position]);
-  const nearest = nearby[0];
+      const rawServiceKey = process.env.EXPO_PUBLIC_KMA_SERVICE_KEY;
+      if (!rawServiceKey) throw new Error('KMA_SERVICE_KEY_MISSING');
+      // Decode once and encode once: avoids corrupting Data.go.kr decoded keys.
+      const serviceKey = getEncodedKmaServiceKey(rawServiceKey);
+      const { date, time } = getKmaBaseDateTime();
+      const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=${serviceKey}&pageNo=1&numOfRows=60&dataType=JSON&base_date=${date}&base_time=${time}&nx=${beach.nx}&ny=${beach.ny}`;
+      const response = await fetch(url);
+      const responseText = await response.text();
+      console.log('KMA response:', response.status, responseText);
+      let data;
+      try { data = JSON.parse(responseText); }
+      catch (_) { throw new Error('KMA_RESPONSE_NOT_JSON'); }
+      const header = data?.response?.header;
+      if (!response.ok || header?.resultCode !== '00') throw new Error(header?.resultMsg || `KMA_HTTP_${response.status}`);
+      const values = Object.fromEntries((data?.response?.body?.items?.item || []).map((item) => [item.category, item.obsrValue]));
+      if (values.T1H === undefined || values.WSD === undefined) throw new Error('KMA_OBSERVATION_NOT_READY');
+      setWeather({ temperature: Number(values.T1H), wind: Number(values.WSD), sky: values.SKY, rain: values.PTY, at: `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)} ${time.slice(0, 2)}:00` });
+    } catch (requestError) {
+      console.log('KMA request error:', requestError?.message || requestError);
+      setWeather(null);
+      setError(language === 'en' ? 'KMA data is being updated. Please try again shortly.' : '기상청 데이터 업데이트 중입니다. 잠시 후 다시 확인해 주세요.');
+    } finally { setWeatherLoading(false); }
+  }, [language]);
+  useEffect(() => { locate(); AsyncStorage.getItem('favoriteBeaches').then((value) => setFavorites(JSON.parse(value || '[]'))).catch(() => {}); }, [locate]);
+  useEffect(() => { loadWeather(nearest); }, [nearest.name, loadWeather]);
   const toggleFavorite = async (name) => { const next = favorites.includes(name) ? favorites.filter((item) => item !== name) : [...favorites, name]; setFavorites(next); await AsyncStorage.setItem('favoriteBeaches', JSON.stringify(next)); };
-  const hour = now.getHours(); const waterTemp = 22 + Math.round(Math.sin(hour / 24 * Math.PI) * 2); const wind = 2.5 + ((hour * 3) % 11) / 2; const current = 0.2 + ((hour * 7) % 7) / 10; const score = Number(waterTemp >= 25) + Number(wind >= 6) + Number(current >= 0.65); const risk = [{ text: '안전', color: '#15803D', bg: '#DCFCE7' }, { text: '관심', color: '#B45309', bg: '#FEF3C7' }, { text: '주의', color: '#C2410C', bg: '#FFEDD5' }, { text: '경보', color: '#B91C1C', bg: '#FEE2E2' }][score];
-
-  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
-    <View style={s.header}><View><Text style={s.logo}>seafari</Text><Text style={s.welcome}>{isGuest ? '게스트 님, 환영합니다!' : `${user?.nickname || '탐험가'} 님, 환영합니다!`}</Text></View>{isGuest ? <TouchableOpacity style={s.loginButton} onPress={() => navigation.getParent()?.navigate('Auth')}><Text style={s.loginText}>로그인</Text></TouchableOpacity> : <Ionicons name="water" size={29} color="#00B4D8" />}</View>
-    {isGuest && <TouchableOpacity style={s.guestBanner} onPress={() => navigation.getParent()?.navigate('Auth')}><Ionicons name="cloud-upload-outline" size={18} color="#075985" /><Text style={s.guestText}>로그인하고 기록과 즐겨찾기를 안전하게 저장해보세요!</Text><Text style={s.guestLink}>로그인</Text></TouchableOpacity>}
-    <View style={s.favoriteSection}><Text style={s.sectionLabel}>관심 해수욕장</Text><View style={s.favoriteRow}>{['해운대 해수욕장', '광안리 해수욕장', '경포 해수욕장'].map((name) => <TouchableOpacity key={name} onPress={() => toggleFavorite(name)} style={[s.favoriteChip, favorites.includes(name) && s.favoriteOn]}><Ionicons name={favorites.includes(name) ? 'heart' : 'heart-outline'} size={14} color="#FF4D4D" /><Text style={s.favoriteText}>{name.replace(' 해수욕장', '')}</Text></TouchableOpacity>)}</View></View>
-    {loadingLocation ? <View style={s.card}><ActivityIndicator color="#00B4D8" /><Text style={s.loadingText}>가까운 해수욕장을 찾고 있어요...</Text></View> : <View style={s.card}><View style={s.cardTop}><View><Text style={s.caption}>가장 가까운 해수욕장</Text><Text style={s.beachName}>{nearest.name}</Text><Text style={s.subtext}>{nearest.distance.toFixed(1)}km · {nearest.region}</Text></View><TouchableOpacity onPress={() => toggleFavorite(nearest.name)}><Ionicons name={favorites.includes(nearest.name) ? 'heart' : 'heart-outline'} size={30} color="#FF4D4D" /></TouchableOpacity></View>{notice ? <TouchableOpacity onPress={loadLocation} style={s.notice}><Text style={s.noticeText}>{notice} · 다시 시도</Text></TouchableOpacity> : null}</View>}
-    <View style={s.card}><View style={s.cardTop}><View><Text style={s.caption}>실시간 해파리 위험도 예보</Text><Text style={s.beachName}>{nearest?.name || '해운대 해수욕장'}</Text></View><View style={[s.riskBadge, { backgroundColor: risk.bg }]}><Text style={{ color: risk.color, fontWeight: '900' }}>{risk.text}</Text></View></View><View style={s.metrics}><Metric icon="thermometer-outline" label="수온" value={`${waterTemp}°C`} /><Metric icon="navigate-outline" label="흐름" value={`${current.toFixed(1)}m/s`} /><Metric icon="flag-outline" label="바람" value={`${wind.toFixed(1)}m/s`} /></View><Text style={s.subtext}>수온·유속·바람을 조합한 모의 예보입니다.</Text></View>
-    <View style={s.menuGrid}><Menu icon="pulse-outline" title="실시간 예보" text="해양 안전 정보" onPress={() => {}} /><Menu icon="scan-outline" title="AI 생물 스캐너" text="사진으로 위험 확인" onPress={() => navigation.navigate('Scanner')} /><Menu icon="book-outline" title="해양 도감" text="생물 정보 검색" onPress={() => navigation.navigate('Dictionary')} /><Menu icon="medkit-outline" title="응급 대처" text="119·오프라인 수칙" onPress={() => navigation.navigate('Emergency')} /></View>
+  const riskScore = weather ? Number(weather.wind >= 9) + Number(weather.temperature >= 26) : 0; const risk = [[t('safe'), '#15803D', '#DCFCE7'], [t('interest'), '#B45309', '#FEF3C7'], [t('caution'), '#C2410C', '#FFEDD5'], [t('warning'), '#B91C1C', '#FEE2E2']][riskScore];
+  return <SafeAreaView style={[s.safe, { backgroundColor: colors.background }, Platform.OS === 'web' && { transition: 'background-color 180ms ease, color 180ms ease' }]}><ScrollView contentContainerStyle={s.container}>
+    <View style={s.header}><View><Text style={[s.logo, { color: colors.text }]}>{t('brand')}</Text><Text style={[s.welcome, { color: colors.muted }]}>{isGuest ? t('welcomeGuest') : `${user?.nickname || 'Sea fari'}${language === 'en' ? ', welcome!' : ' 님, 환영합니다!'}`}</Text></View><View style={s.headerRight}><HeaderControls />{isGuest && <TouchableOpacity style={s.login} onPress={() => navigation.getParent()?.navigate('Auth')}><Text style={s.loginText}>{t('login')}</Text></TouchableOpacity>}</View></View>
+    <Text style={[s.heading, { color: colors.text }]}>{t('beaches')}</Text><View style={s.chips}>{BEACHES.map((beach) => <TouchableOpacity key={beach.name} onPress={() => toggleFavorite(beach.name)} style={[s.chip, { backgroundColor: colors.surface }, favorites.includes(beach.name) && s.chipActive]}><Ionicons name={favorites.includes(beach.name) ? 'heart' : 'heart-outline'} color="#FF4D4D" size={14} /><Text style={[s.chipText, { color: colors.text }]}>{beach.name.replace('해수욕장', '')}</Text></TouchableOpacity>)}</View>
+    <Card colors={colors}><Text style={s.caption}>{t('nearest')}</Text>{loadingLocation ? <ActivityIndicator color={colors.accent} /> : <><Text style={[s.beach, { color: colors.text }]}>{nearest.name}</Text><Text style={[s.muted, { color: colors.muted }]}>{nearest.distance.toFixed(1)} km · Busan</Text></>}</Card>
+    <Card colors={colors}><View style={s.row}><View><Text style={s.caption}>{t('forecast')}</Text><Text style={[s.beach, { color: colors.text }]}>{nearest.name}</Text></View><View style={[s.badge, { backgroundColor: risk[2] }]}><Text style={{ color: risk[1], fontWeight: '900' }}>{risk[0]}</Text></View></View>{weatherLoading ? <View style={s.loading}><ActivityIndicator color={colors.accent} /><Text style={[s.muted, { color: colors.muted }]}>{t('loadingWeather')}</Text></View> : weather ? <><View style={s.metrics}><Metric icon="thermometer-outline" label={t('temperature')} value={`${weather.temperature.toFixed(1)}°C`} colors={colors} /><Metric icon="flag-outline" label={t('wind')} value={`${weather.wind.toFixed(1)}m/s`} colors={colors} /><Metric icon="cloud-outline" label={t('weather')} value={weatherLabel(weather.sky, weather.rain, language)} colors={colors} /></View><Text style={[s.muted, { color: colors.muted }]}>{weather.at}</Text></> : <TouchableOpacity style={s.weatherFallback} onPress={() => loadWeather(nearest)}><Ionicons name="refresh-outline" size={18} color={colors.icon} /><Text style={[s.fallbackText, { color: colors.icon }]}>{error || (language === 'en' ? 'KMA data is being updated.' : '기상청 데이터 업데이트 중입니다.')}</Text></TouchableOpacity>}<Text style={[s.source, { color: colors.muted }]}>{t('sourceKma')}</Text></Card>
+    <View style={s.grid}><Menu icon="scan-outline" title={t('scanner')} text={language === 'en' ? 'Check risks from photos' : '사진으로 위험 확인'} colors={colors} onPress={() => navigation.navigate('Scanner')} /><Menu icon="book-outline" title={t('dictionary')} text={language === 'en' ? 'Search marine life' : '생물 정보 검색'} colors={colors} onPress={() => navigation.navigate('Dictionary')} /><Menu icon="medkit-outline" title={t('emergency')} text="119" colors={colors} onPress={() => navigation.navigate('Emergency')} /><Menu icon="person-outline" title={t('profile')} text={language === 'en' ? 'Settings' : '설정'} colors={colors} onPress={() => navigation.navigate('Profile')} /></View>
   </ScrollView></SafeAreaView>;
 }
-function Metric({ icon, label, value }) { return <View style={s.metric}><Ionicons name={icon} size={20} color="#00B4D8" /><Text style={s.metricLabel}>{label}</Text><Text style={s.metricValue}>{value}</Text></View>; }
-function Menu({ icon, title, text, onPress }) { return <TouchableOpacity style={s.menu} onPress={onPress}><Ionicons name={icon} size={23} color="#00B4D8" /><Text style={s.menuTitle}>{title}</Text><Text style={s.menuText}>{text}</Text></TouchableOpacity>; }
-function distanceKm(a, b) { const r = (value) => value * Math.PI / 180; const dLat = r(b.latitude - a.latitude); const dLng = r(b.longitude - a.longitude); const x = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.latitude)) * Math.cos(r(b.latitude)) * Math.sin(dLng / 2) ** 2; return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)); }
-const s = StyleSheet.create({ safe: { flex: 1, backgroundColor: '#F0FAFC' }, container: { padding: 20, paddingBottom: 40, width: '100%', maxWidth: 680, alignSelf: 'center' }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, marginBottom: 20 }, logo: { fontSize: 30, fontWeight: '900', color: '#0A192F' }, welcome: { color: '#607D8B', marginTop: 4 }, loginButton: { backgroundColor: '#00B4D8', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 14 }, loginText: { color: '#0A192F', fontWeight: '900', fontSize: 12 }, guestBanner: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#DDF6FB', padding: 12, borderRadius: 13, marginBottom: 17 }, guestText: { color: '#075985', fontSize: 12, flex: 1, fontWeight: '700' }, guestLink: { color: '#075985', fontWeight: '900', fontSize: 12 }, favoriteSection: { marginBottom: 13 }, sectionLabel: { color: '#0A192F', fontWeight: '900', fontSize: 14, marginBottom: 7 }, favoriteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, favoriteChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14 }, favoriteOn: { backgroundColor: '#FFF0F0' }, favoriteText: { color: '#475569', fontSize: 12, fontWeight: '700' }, card: { backgroundColor: '#FFF', borderRadius: 20, padding: 18, marginBottom: 14, ...(Platform.OS === 'web' ? { boxShadow: '0 4px 16px rgba(10,25,47,0.08)' } : { elevation: 2 }) }, cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 }, caption: { color: '#00A2C2', fontSize: 12, fontWeight: '900' }, beachName: { color: '#0A192F', fontSize: 20, fontWeight: '900', marginTop: 5 }, subtext: { color: '#607D8B', fontSize: 12, marginTop: 6 }, notice: { backgroundColor: '#FFF7ED', borderRadius: 9, padding: 10, marginTop: 12 }, noticeText: { color: '#9A3412', fontSize: 12, fontWeight: '700' }, loadingText: { color: '#075985', textAlign: 'center', marginTop: 10, fontWeight: '700' }, riskBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14 }, metrics: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 }, metric: { flex: 1, alignItems: 'center' }, metricLabel: { color: '#607D8B', fontSize: 12, marginTop: 5 }, metricValue: { color: '#0A192F', fontWeight: '900', fontSize: 13, marginTop: 3 }, menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 }, menu: { width: '48%', backgroundColor: '#FFF', borderRadius: 17, padding: 15 }, menuTitle: { color: '#0A192F', fontWeight: '900', fontSize: 14, marginTop: 8 }, menuText: { color: '#607D8B', fontSize: 11, marginTop: 4 } });
+function Card({ colors, children }) { return <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }, Platform.OS === 'web' && { boxShadow: '0 4px 16px rgba(10,25,47,0.12)' }]}>{children}</View>; }
+function Metric({ icon, label, value, colors }) { return <View style={s.metric}><Ionicons name={icon} size={20} color={colors.accent} /><Text style={[s.metricLabel, { color: colors.muted }]}>{label}</Text><Text style={[s.metricValue, { color: colors.text }]}>{value}</Text></View>; }
+function Menu({ icon, title, text, colors, onPress }) { return <TouchableOpacity style={[s.menu, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={onPress}><Ionicons name={icon} size={23} color={colors.accent} /><Text style={[s.menuTitle, { color: colors.text }]}>{title}</Text><Text style={[s.menuText, { color: colors.muted }]}>{text}</Text></TouchableOpacity>; }
+const s = StyleSheet.create({ safe: { flex: 1 }, container: { padding: 20, paddingBottom: 40, maxWidth: 680, width: '100%', alignSelf: 'center' }, header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }, headerRight: { flexDirection: 'row', alignItems: 'center', gap: 7 }, logo: { fontSize: 30, fontWeight: '900' }, welcome: { marginTop: 4 }, login: { backgroundColor: '#00B4D8', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 13 }, loginText: { color: '#062235', fontWeight: '900', fontSize: 12 }, heading: { fontSize: 15, fontWeight: '900', marginBottom: 8 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 14 }, chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14 }, chipActive: { backgroundColor: '#FFF0F0' }, chipText: { fontSize: 12, fontWeight: '700' }, card: { borderWidth: 1, borderRadius: 20, padding: 18, marginBottom: 14 }, row: { flexDirection: 'row', justifyContent: 'space-between' }, caption: { color: '#00A2C2', fontSize: 12, fontWeight: '900' }, beach: { fontSize: 20, fontWeight: '900', marginTop: 5 }, muted: { fontSize: 12, marginTop: 8 }, badge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14 }, loading: { paddingVertical: 22, alignItems: 'center' }, weatherFallback: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#E0F2FE', padding: 12, borderRadius: 12, marginTop: 18 }, fallbackText: { flex: 1, fontWeight: '700', fontSize: 13, lineHeight: 19 }, metrics: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 }, metric: { flex: 1, alignItems: 'center' }, metricLabel: { fontSize: 12, marginTop: 5 }, metricValue: { fontWeight: '900', fontSize: 13, marginTop: 3 }, source: { fontSize: 11, marginTop: 13 }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, menu: { width: '48%', borderWidth: 1, borderRadius: 17, padding: 15 }, menuTitle: { fontWeight: '900', fontSize: 14, marginTop: 8 }, menuText: { fontSize: 11, marginTop: 4 } });
