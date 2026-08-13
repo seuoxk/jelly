@@ -3,12 +3,14 @@ import { Alert, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, Vie
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from './AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const USERS_KEY = 'localUsers';
 
 // Local-only account flow for this Expo demo. A real release must send passwords
 // to a secure server and store only a session token on the device.
 export default function AuthScreen({ navigation }) {
+  const { t } = useTranslation();
   const { signIn } = useAuth();
   const [mode, setMode] = useState('login');
   const [userId, setUserId] = useState('');
@@ -45,7 +47,7 @@ export default function AuthScreen({ navigation }) {
   };
   const changeMode = (nextMode) => { setMode(nextMode); setPassword(''); setPasswordConfirm(''); };
 
-  return <SafeAreaView style={styles.safe}><View style={styles.container}><Ionicons name="water" size={64} color="#00B4D8" /><Text style={styles.brand}>sea fari</Text><Text style={styles.subtitle}>{mode === 'login' ? '내 계정으로 로그인하세요.' : '새 계정을 만들어 sea fari를 시작하세요.'}</Text><View style={styles.tabs}><Tab active={mode === 'login'} title="로그인" onPress={() => changeMode('login')} /><Tab active={mode === 'signup'} title="회원가입" onPress={() => changeMode('signup')} /></View><Field icon="person-outline" value={userId} onChangeText={setUserId} placeholder="아이디 또는 이메일" editable={!submitting} returnKeyType="next" /><Field icon="lock-closed-outline" value={password} onChangeText={setPassword} placeholder="비밀번호 (4자 이상)" secureTextEntry editable={!submitting} returnKeyType={mode === 'signup' ? 'next' : 'done'} onSubmitEditing={mode === 'login' ? submit : undefined} />{mode === 'signup' && <Field icon="checkmark-circle-outline" value={passwordConfirm} onChangeText={setPasswordConfirm} placeholder="비밀번호 확인" secureTextEntry editable={!submitting} returnKeyType="done" onSubmitEditing={submit} />}<TouchableOpacity style={[styles.submit, submitting && styles.disabled]} onPress={submit} disabled={submitting}><Text style={styles.submitText}>{submitting ? '처리 중...' : mode === 'login' ? '로그인' : '회원가입'}</Text></TouchableOpacity><TouchableOpacity style={styles.guest} onPress={() => navigation.replace('AppTabs')} disabled={submitting}><Text style={styles.guestText}>로그인 없이 둘러보기</Text></TouchableOpacity></View></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><View style={styles.container}><Ionicons name="water" size={64} color="#00B4D8" /><Text style={styles.brand}>{t('common.brand')}</Text><Text style={styles.subtitle}>{mode === 'login' ? t('auth.loginSubtitle') : t('auth.signupSubtitle')}</Text><View style={styles.tabs}><Tab active={mode === 'login'} title={t('common.login')} onPress={() => changeMode('login')} /><Tab active={mode === 'signup'} title={t('common.signup')} onPress={() => changeMode('signup')} /></View><Field icon="person-outline" value={userId} onChangeText={setUserId} placeholder={t('auth.idPlaceholder')} editable={!submitting} returnKeyType="next" /><Field icon="lock-closed-outline" value={password} onChangeText={setPassword} placeholder={t('auth.passwordPlaceholder')} secureTextEntry editable={!submitting} returnKeyType={mode === 'signup' ? 'next' : 'done'} onSubmitEditing={mode === 'login' ? submit : undefined} />{mode === 'signup' && <Field icon="checkmark-circle-outline" value={passwordConfirm} onChangeText={setPasswordConfirm} placeholder={t('auth.confirmPasswordPlaceholder')} secureTextEntry editable={!submitting} returnKeyType="done" onSubmitEditing={submit} />}<TouchableOpacity style={[styles.submit, submitting && styles.disabled]} onPress={submit} disabled={submitting}><Text style={styles.submitText}>{submitting ? t('auth.processing') : mode === 'login' ? t('common.login') : t('common.signup')}</Text></TouchableOpacity><TouchableOpacity style={styles.guest} onPress={() => navigation.replace('AppTabs')} disabled={submitting}><Text style={styles.guestText}>{t('common.guest')}</Text></TouchableOpacity></View></SafeAreaView>;
 }
 function Tab({ active, title, onPress }) { return <TouchableOpacity onPress={onPress} style={[styles.tab, active && styles.tabActive]}><Text style={[styles.tabText, active && styles.tabTextActive]}>{title}</Text></TouchableOpacity>; }
 function Field({ icon, ...props }) { return <View style={styles.field}><Ionicons name={icon} size={19} color="#00B4D8" /><TextInput style={styles.input} placeholderTextColor="#78909C" autoCapitalize="none" autoCorrect={false} {...props} /></View>; }

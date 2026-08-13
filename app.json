@@ -1,5 +1,11 @@
 {
-  "plugins": [
-   
-  ]
+  "expo": {
+    "name": "seafari",
+    "slug": "seafari",
+    "description": "해파리 쏘임 방지 및 해양 생물 정보",
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": []
+  }
 }

@@ -95,6 +95,15 @@ export default function ScannerScreen({ navigation }) {
   };
   const goHome = () => navigation?.navigate?.('Main');
 
+  // Keep all upload/analysis state in sync when a user removes a photo.
+  // The delete control is disabled while an active request owns the image.
+  const clearImage = () => {
+    if (loading) return;
+    setImageUri(null);
+    setResult(null);
+    setErrorMessage('');
+  };
+
   const pickImage = async (useCamera) => {
     setErrorMessage('');
     const permission = useCamera
@@ -213,21 +222,33 @@ export default function ScannerScreen({ navigation }) {
         <Text style={[styles.title, { color: colors.text }]}>{t('scanner')}</Text>
         <Text style={[styles.subtitle, { color: colors.muted }]}>{t('scannerHint')}</Text>
 
-        {imageUri ? <Image source={{ uri: imageUri }} style={styles.image} /> : <View style={styles.placeholder}><Ionicons name="scan-outline" size={54} color="#00B4D8" /></View>}
-        <View style={styles.actions}>
-          <ActionButton icon="camera-outline" text={t('camera')} onPress={() => pickImage(true)} />
-          <ActionButton icon="images-outline" text={t('gallery')} onPress={() => pickImage(false)} />
-        </View>
+        {imageUri ? <View style={styles.imagePreview}>
+          <Image source={{ uri: imageUri }} style={styles.image} />
+          <TouchableOpacity
+            style={[styles.removePhoto, loading && styles.removePhotoDisabled]}
+            onPress={clearImage}
+            disabled={loading}
+            accessibilityLabel={t('common.removePhoto')}
+            accessibilityHint={t('common.removePhoto')}
+          >
+            <Ionicons name="close-circle" size={34} color="#FF4D4D" />
+          </TouchableOpacity>
+        </View> : <><View style={[styles.placeholder, { backgroundColor: colors.soft, borderColor: colors.accent }]}><Ionicons name="scan-outline" size={54} color={colors.accent} /></View>
+          <View style={styles.actions}>
+            <ActionButton icon="camera-outline" text={t('camera')} onPress={() => pickImage(true)} />
+            <ActionButton icon="images-outline" text={t('gallery')} onPress={() => pickImage(false)} />
+          </View>
+        </>}
 
-        {loading && <View style={[styles.skeleton, { backgroundColor: colors.surface }]}><ActivityIndicator color={colors.accent} /><View style={styles.skeletonWide} /><View style={styles.skeletonLine} /><View style={styles.skeletonShort} /><Text style={[styles.loadingText, { color: colors.icon }]}>{t('analyzing')}</Text></View>}
-        {!!errorMessage && <View style={styles.errorCard}><Ionicons name="alert-circle-outline" size={20} color="#B91C1C" /><Text style={styles.errorText}>{errorMessage}</Text></View>}
+        {loading && <View style={[styles.skeleton, { backgroundColor: colors.surface }]}><ActivityIndicator color={colors.accent} /><View style={[styles.skeletonWide, { backgroundColor: colors.skeleton }]} /><View style={[styles.skeletonLine, { backgroundColor: colors.skeleton }]} /><View style={[styles.skeletonShort, { backgroundColor: colors.skeleton }]} /><Text style={[styles.loadingText, { color: colors.accentStrong }]}>{t('analyzing')}</Text></View>}
+        {!!errorMessage && <View style={[styles.errorCard, { backgroundColor: colors.dangerSoft, borderColor: colors.danger }]}><Ionicons name="alert-circle-outline" size={20} color={colors.danger} /><Text style={[styles.errorText, { color: colors.dangerText }]}>{errorMessage}</Text></View>}
 
-        {result && <View style={[styles.resultCard, hazardous && styles.warningCard]}>
+        {result && <View style={[styles.resultCard, { backgroundColor: colors.surface }, hazardous && [styles.warningCard, { borderColor: colors.danger, backgroundColor: colors.dangerSoft }]]}>
           <View style={styles.resultHeader}><View style={{ flex: 1 }}><Text style={styles.name}>{result.name}</Text>{result.scientificName ? <Text style={styles.scientific}>{result.scientificName}</Text> : null}</View><View style={[styles.badge, hazardous ? styles.dangerBadge : styles.safeBadge]}><Text style={hazardous ? styles.dangerBadgeText : styles.safeBadgeText}>{result.dangerLevel}</Text></View></View>
-          <Text style={styles.category}>{result.category}</Text>
-          <Text style={styles.sectionTitle}>특징 및 위험성</Text><Text style={styles.body}>{result.description}</Text>
-          <Text style={styles.sectionTitle}>발견·접촉 시 대처</Text><Text style={styles.body}>{result.actionGuide}</Text>
-          {hazardous && <TouchableOpacity style={styles.emergencyButton} onPress={() => navigation?.navigate?.('Emergency')}><Ionicons name="medkit-outline" size={19} color="#FFF" /><Text style={styles.emergencyText}>응급 대처 가이드 보기</Text></TouchableOpacity>}
+          <Text style={[styles.category, { backgroundColor: colors.soft, color: colors.accentStrong }]}>{result.category}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('featureRisk')}</Text><Text style={[styles.body, { color: colors.muted }]}>{result.description}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('actionGuide')}</Text><Text style={[styles.body, { color: colors.muted }]}>{result.actionGuide}</Text>
+          {hazardous && <TouchableOpacity style={[styles.emergencyButton, { backgroundColor: colors.danger }]} onPress={() => navigation?.navigate?.('Emergency')}><Ionicons name="medkit-outline" size={19} color={colors.onAccent} /><Text style={[styles.emergencyText, { color: colors.onAccent }]}>{t('emergencyGuide')}</Text></TouchableOpacity>}
         </View>}
 
         <Text style={[styles.historyTitle, { color: colors.text }]}>{t('recentScans')}</Text>
@@ -243,7 +264,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F0FAFC' }, container: { padding: 20, paddingBottom: 42, maxWidth: 680, width: '100%', alignSelf: 'center' },
   navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, backButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingRight: 10 }, backText: { color: '#075985', fontWeight: '800', marginLeft: 2 }, homeButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0F2FE', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 13 }, homeText: { color: '#075985', fontWeight: '800', marginLeft: 4, fontSize: 12 },
   title: { fontSize: 26, fontWeight: '900', color: '#0A192F', marginTop: 8 }, subtitle: { color: '#607D8B', marginTop: 7, lineHeight: 20 },
-  placeholder: { height: 240, borderRadius: 22, backgroundColor: '#E0F2FE', marginTop: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderStyle: 'dashed', borderColor: '#7DD3FC' }, image: { height: 240, borderRadius: 22, marginTop: 22, backgroundColor: '#E0F2FE' },
+  placeholder: { height: 240, borderRadius: 22, backgroundColor: '#E0F2FE', marginTop: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderStyle: 'dashed', borderColor: '#7DD3FC' }, imagePreview: { position: 'relative', marginTop: 22 }, image: { height: 240, borderRadius: 22, backgroundColor: '#E0F2FE' }, removePhoto: { position: 'absolute', top: 10, right: 10, zIndex: 10, elevation: 10, borderRadius: 18, backgroundColor: '#FFF', ...(Platform.OS === 'web' ? { boxShadow: '0 2px 8px rgba(10,25,47,0.22)' } : {}) }, removePhotoDisabled: { opacity: 0.45 },
   actions: { flexDirection: 'row', gap: 12, marginTop: 14 }, actionButton: { flex: 1, padding: 15, borderRadius: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', ...(Platform.OS === 'web' ? { boxShadow: '0 3px 12px rgba(10,25,47,0.08)' } : { elevation: 2 }) }, actionText: { color: '#075985', fontWeight: '800', marginLeft: 7 },
   skeleton: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, marginTop: 18, alignItems: 'stretch' }, skeletonWide: { height: 18, width: '75%', marginTop: 16, backgroundColor: '#D9EEF3', borderRadius: 8 }, skeletonLine: { height: 13, width: '100%', marginTop: 13, backgroundColor: '#EAF5F7', borderRadius: 8 }, skeletonShort: { height: 13, width: '56%', marginTop: 9, backgroundColor: '#EAF5F7', borderRadius: 8 }, loadingText: { color: '#075985', fontWeight: '800', textAlign: 'center', marginTop: 14 },
   errorCard: { flexDirection: 'row', gap: 8, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 14, padding: 13, marginTop: 16 }, errorText: { color: '#991B1B', flex: 1, lineHeight: 19, fontSize: 13 },

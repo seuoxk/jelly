@@ -1,8 +1,14 @@
-export const translations = {
-  ko: {
-    brand: 'sea fari', welcomeGuest: '게스트 님, 환영합니다!', login: '로그인', beaches: '부산 7대 해수욕장', nearest: '가장 가까운 부산 해수욕장', forecast: '실시간 해파리 위험도 예보', loadingWeather: '기상청 실시간 데이터를 불러오는 중...', source: '출처: 기상청', scanner: 'AI 생물 스캐너', scannerHint: '사진을 찍거나 올리면 해양 생물과 안전 정보를 분석합니다.', camera: '카메라 촬영', gallery: '사진 선택', analyzing: 'AI가 사진 속 생물을 분석 중입니다...', dictionary: '해양 생물 도감', emergency: '응급 대처', profile: '마이페이지', home: '홈', back: '뒤로가기', safe: '안전', interest: '관심', caution: '주의', warning: '경보', temperature: '기온', wind: '풍속', weather: '날씨', darkMode: '다크 모드', language: '언어', recentScans: '최근 스캔 기록', noScans: '아직 저장된 스캔 기록이 없습니다.', featureRisk: '특징 및 위험성', actionGuide: '발견·접촉 시 대처', emergencyGuide: '응급 대처 가이드 보기', sourceKma: '출처: 기상청(KMA) 단기예보 조회서비스', light: '라이트', dark: '다크',
-  },
-  en: {
-    brand: 'sea fari', welcomeGuest: 'Welcome, Guest!', login: 'Sign in', beaches: 'Busan’s Seven Beaches', nearest: 'Nearest Busan Beach', forecast: 'Live Jellyfish Risk Forecast', loadingWeather: 'Loading live KMA weather data...', source: 'Source: KMA', scanner: 'AI Marine Scanner', scannerHint: 'Take or upload a photo to analyse marine life and safety information.', camera: 'Take Photo', gallery: 'Choose Photo', analyzing: 'AI is analysing the marine life in your photo...', dictionary: 'Marine Encyclopedia', emergency: 'Emergency Guide', profile: 'My Page', home: 'Home', back: 'Back', safe: 'Safe', interest: 'Watch', caution: 'Caution', warning: 'Alert', temperature: 'Temperature', wind: 'Wind', weather: 'Weather', darkMode: 'Dark Mode', language: 'Language', recentScans: 'Recent Scans', noScans: 'No scans have been saved yet.', featureRisk: 'Features & Risk', actionGuide: 'What to do after contact', emergencyGuide: 'Open Emergency Guide', sourceKma: 'Source: Korea Meteorological Administration (KMA) Short-term Forecast API', light: 'Light', dark: 'Dark',
-  },
-};
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import ko from './src/locales/ko.json';
+import en from './src/locales/en.json';
+
+i18n.use(initReactI18next).init({
+  resources: { ko: { translation: ko }, en: { translation: en } },
+  lng: 'ko',
+  fallbackLng: 'ko',
+  interpolation: { escapeValue: false },
+  compatibilityJSON: 'v4',
+});
+
+export default i18n;
