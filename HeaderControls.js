@@ -1,18 +1,16 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppSettings } from './AppSettingsContext';
 
+const LANGUAGES = [{ code: 'ko', label: '한국어', short: 'KO' }, { code: 'en', label: 'English', short: 'EN' }, { code: 'zh', label: '中文', short: 'ZH' }, { code: 'ja', label: '日本語', short: 'JA' }];
+const THEMES = [{ id: 'system', icon: 'phone-portrait-outline' }, { id: 'light', icon: 'sunny-outline' }, { id: 'dark', icon: 'moon-outline' }, { id: 'ocean', icon: 'water-outline' }, { id: 'pastel', icon: 'color-palette-outline' }, { id: 'halloween', icon: 'skull-outline', seasonal: true }, { id: 'christmas', icon: 'gift-outline', seasonal: true }];
 export default function HeaderControls() {
-  const { isDark, toggleTheme, language, setLanguage, colors, t } = useAppSettings();
-  return <View style={styles.row}>
-    <TouchableOpacity onPress={toggleTheme} style={[styles.button, { backgroundColor: colors.soft, borderColor: colors.border }]} accessibilityLabel={t('common.darkMode')}>
-      <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={colors.icon} />
-    </TouchableOpacity>
-    <TouchableOpacity onPress={() => setLanguage(language === 'ko' ? 'en' : 'ko')} style={[styles.button, { backgroundColor: colors.soft, borderColor: colors.border }]} accessibilityLabel={t('common.language')}>
-      <Text style={[styles.text, { color: colors.icon }]}>{language === 'ko' ? 'KOR' : 'ENG'}</Text>
-    </TouchableOpacity>
-  </View>;
+  const { theme, resolvedTheme, setTheme, language, setLanguage, colors, t, isSeasonalThemeAvailable } = useAppSettings(); const [languageOpen, setLanguageOpen] = useState(false); const [themeOpen, setThemeOpen] = useState(false);
+  const current = LANGUAGES.find((item) => item.code === language) || LANGUAGES[0];
+  const controlColor = colors.icon || colors.accentStrong;
+  return <View style={s.row}><TouchableOpacity onPress={() => setThemeOpen(true)} style={[s.button, { backgroundColor: colors.soft, borderColor: colors.border }]} accessibilityLabel={t('theme.title')}><Ionicons name="color-palette-outline" size={18} color={controlColor} /></TouchableOpacity><TouchableOpacity onPress={() => setLanguageOpen(true)} style={[s.button, { backgroundColor: colors.soft, borderColor: colors.border }]} accessibilityLabel={t('common.language')}><Text style={[s.text, { color: controlColor }]}>{current.short}</Text></TouchableOpacity><Modal visible={languageOpen} transparent animationType="fade" onRequestClose={() => setLanguageOpen(false)}><PickerSheet title={t('common.language')} colors={colors}>{LANGUAGES.map((item) => <Option key={item.code} label={item.label} active={item.code === language} colors={colors} onPress={() => { setLanguage(item.code); setLanguageOpen(false); }} />)}</PickerSheet></Modal><Modal visible={themeOpen} transparent animationType="fade" onRequestClose={() => setThemeOpen(false)}><PickerSheet title={t('theme.title')} colors={colors}>{THEMES.map((item) => { const available = !item.seasonal || isSeasonalThemeAvailable(item.id); return <Option key={item.id} label={t(`theme.${item.id}`)} icon={item.icon} active={item.id === theme} locked={!available} lockText={t('theme.seasonLocked')} colors={colors} onPress={() => { if (available) { setTheme(item.id); setThemeOpen(false); } }} />; })}</PickerSheet></Modal></View>;
 }
-
-const styles = StyleSheet.create({ row: { flexDirection: 'row', gap: 7 }, button: { height: 34, minWidth: 42, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }, text: { fontWeight: '900', fontSize: 11 } });
+function PickerSheet({ title, colors, children }) { return <View style={[s.backdrop, { backgroundColor: colors.backdrop }]}><View style={[s.sheet, { backgroundColor: colors.surface }]}><Text style={[s.title, { color: colors.text }]}>{title}</Text>{children}</View></View>; }
+function Option({ label, icon, active, locked, lockText, colors, onPress }) { return <TouchableOpacity disabled={locked} style={[s.option, { borderColor: colors.border }, active && { backgroundColor: colors.soft }, locked && s.locked]} onPress={onPress}>{icon && <Ionicons name={icon} size={19} color={locked ? colors.muted : colors.accent} />}<Text style={[s.optionText, { color: locked ? colors.muted : colors.text }]}>{label}</Text>{locked ? <Text style={[s.lockText, { color: colors.muted }]}>{lockText}</Text> : active ? <Ionicons name="checkmark" size={19} color={colors.accent} /> : null}</TouchableOpacity>; }
+const s = StyleSheet.create({ row: { flexDirection: 'row', gap: 7 }, button: { height: 34, minWidth: 42, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, text: { fontWeight: '900', fontSize: 11 }, backdrop: { flex: 1, justifyContent: 'center', padding: 28 }, sheet: { borderRadius: 20, padding: 18 }, title: { fontSize: 18, fontWeight: '900', marginBottom: 8 }, option: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 10, borderTopWidth: 1 }, optionText: { flex: 1, fontWeight: '800', fontSize: 15 }, lockText: { fontSize: 11 }, locked: { opacity: 0.6 } });

@@ -22,7 +22,9 @@ export default function EmergencyScreen({ navigation }) {
   const [kind, setKind] = useState('jellyfish');
   const [activeStep, setActiveStep] = useState(0);
   const [quickOpen, setQuickOpen] = useState(false);
-  const steps = GUIDES[kind];
+  // Text comes from the active i18next locale; icons stay local presentation data.
+  const translatedSteps = t(`emergency.stepsData.${kind}`, { returnObjects: true });
+  const steps = Array.isArray(translatedSteps) ? translatedSteps.map((step, index) => ({ ...step, icon: GUIDES[kind][index]?.icon || 'medical-outline' })) : GUIDES[kind];
   const selectKind = (next) => { setKind(next); setActiveStep(0); };
   const goHome = () => navigation?.navigate?.('Main');
   const goBack = () => navigation?.canGoBack?.() ? navigation.goBack() : goHome();
